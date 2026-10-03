@@ -1,0 +1,507 @@
+---
+title: "Quant Problem Set 1 (1)"
+format: html
+editor: visual
+---
+
+
+## Problem 1 
+### (a)
+
+```{r}
+# Set a seed so the random sample can be reproduced
+set.seed(1)
+
+# Create a function that calculates the three estimates
+variance_estimators <- function(x) {
+  
+  # Number of observations in the sample
+  n <- length(x)
+  
+  # Variance estimator dividing by n
+  var_n <- sum((x - mean(x))^2) / n
+  
+  # Sample variance dividing by n-1
+  sample_var <- var(x)
+  
+  # Sample standard deviation
+  sample_sd <- sd(x)
+  
+  # Return the three estimates
+  c(var_n = var_n,
+    sample_var = sample_var,
+    sample_sd = sample_sd)
+}
+
+# Generate a sample of 10 observations from N(0, 2)
+x <- rnorm(10, mean = 0, sd = 2)
+
+# Check the sample
+x
+
+# Apply the function to the sample
+variance_estimators(x)
+```
+
+
+
+### (b)
+
+```{r}
+# Set a seed so the simulation can be reproduced
+set.seed(1)
+
+# Simulate 1,000 samples of 5 observations
+simulation_results <- replicate(1000, {
+  x <- rnorm(5, mean = 0, sd = 2)
+  
+  # Apply the function from part (a)
+  variance_estimators(x)
+})
+
+# Convert the simulation results into a data frame
+# Each row represents one simulated sample
+results <- data.frame(
+  sample = 1:1000,
+  t(simulation_results)
+)
+
+# Check the first few rows
+head(results)
+
+# Calculate the mean of the two variance estimators
+mean_var_n <- mean(results$var_n)
+mean_sample_var <- mean(results$sample_var)
+
+# Display the means
+mean_var_n
+mean_sample_var
+
+# True population variance
+true_var <- 4
+
+# Create common breaks so the two histograms can be compared
+max_value <- max(results$var_n, results$sample_var)
+common_breaks <- seq(0, max_value, length.out = 31)
+
+# Plot the sampling distribution of the divide-by-n estimator
+hist(results$var_n,
+     breaks = common_breaks,
+     freq = FALSE,
+     col = "lightgray",
+     main = "Sampling Distributions of Variance Estimators",
+     xlab = "Estimated Variance")
+
+# Add the sampling distribution of the sample variance
+hist(results$sample_var,
+     breaks = common_breaks,
+     freq = FALSE,
+     add = TRUE,
+     col = NA,
+     border = "red",
+     lwd = 2)
+
+# Mark the true variance
+abline(v = true_var,
+       lwd = 2)
+
+# Mark the mean of the divide-by-n estimator
+abline(v = mean_var_n,
+       col = "blue",
+       lwd = 2,
+       lty = 2)
+
+# Mark the mean of the sample variance
+abline(v = mean_sample_var,
+       col = "red",
+       lwd = 2,
+       lty = 2)
+
+# Add a legend
+legend("topright",
+       legend = c("Divide by n", "Sample variance",
+                  "True variance", "Mean: divide by n",
+                  "Mean: sample variance"),
+       col = c("gray", "red", "black", "blue", "red"),
+       lty = c(1, 1, 1, 2, 2),
+       lwd = 2,
+       cex = 0.8)
+```
+
+Answer: The divide-by-n estimator is biased downward. Its mean across the 1,000 samples is approximately 3.358, which is below the true variance of 4. The sample variance (dividing by n - 1) has a mean of about 4.198, which is relatively close to 4, so it is approximately unbiased. The divide-by-n estimator tends to underestimate the true variance because the deviations are measured from the sample mean rather than the true population mean.
+
+
+
+### (c)
+
+```{r}
+# Set a seed so the simulation can be reproduced
+set.seed(1)
+
+# Sample sizes to compare
+sample_sizes <- c(3, 5, 10, 30, 100)
+
+# True population variance
+true_var <- 4
+
+# Create an empty data frame to store the bias results
+bias_results <- data.frame()
+
+# Repeat the simulation for each sample size
+for (n in sample_sizes) {
+  
+  # Simulate 1,000 samples of size n
+  simulation_results <- replicate(1000, {
+    
+    # Generate a sample from N(0, 2)
+    x <- rnorm(n, mean = 0, sd = 2)
+    
+    # Apply the function from part (a)
+    variance_estimators(x)
+  })
+  
+  # Convert the results so that each row represents one sample
+  simulation_df <- data.frame(t(simulation_results))
+  
+  # Calculate the estimated bias of the two variance estimators
+  bias_var_n <- mean(simulation_df$var_n) - true_var
+  bias_sample_var <- mean(simulation_df$sample_var) - true_var
+  
+  # Store the results
+  bias_results <- rbind(
+    bias_results,
+    data.frame(
+      sample_size = n,
+      bias_var_n = bias_var_n,
+      bias_sample_var = bias_sample_var
+    )
+  )
+}
+
+# Display the bias results
+bias_results
+
+# Plot the bias of the divide-by-n estimator
+plot(bias_results$sample_size,
+     bias_results$bias_var_n,
+     type = "b",
+     ylim = range(bias_results$bias_var_n,
+                  bias_results$bias_sample_var,
+                  0),
+     xlab = "Sample Size",
+     ylab = "Estimated Bias",
+     main = "Bias of Variance Estimators")
+
+# Add the bias of the sample variance
+lines(bias_results$sample_size,
+      bias_results$bias_sample_var,
+      type = "b",
+      col = "red")
+
+# Add a horizontal line at zero bias
+abline(h = 0,
+       lty = 2)
+
+# Add a legend
+legend("bottomright",
+       legend = c("Divide by n", "Sample variance"),
+       col = c("black", "red"),
+       lty = 1,
+       pch = 1)
+```
+
+
+
+### (d)
+
+```{r}
+# Set a seed so the simulation can be reproduced
+set.seed(1)
+
+# Sample sizes to compare
+sample_sizes <- c(3, 5, 10, 30, 100)
+
+# True population standard deviation
+true_sd <- 2
+
+# Create an empty data frame to store the bias results
+sd_bias_results <- data.frame()
+
+# Repeat the simulation for each sample size
+for (n in sample_sizes) {
+  
+  # Simulate 1,000 samples of size n
+  simulation_results <- replicate(1000, {
+    
+    # Generate a sample from N(0, 2)
+    x <- rnorm(n, mean = 0, sd = 2)
+    
+    # Apply the function from part (a)
+    variance_estimators(x)
+  })
+  
+  # Convert the results so that each row represents one sample
+  simulation_df <- data.frame(t(simulation_results))
+  
+  # Calculate the estimated bias of the sample standard deviation
+  bias_sample_sd <- mean(simulation_df$sample_sd) - true_sd
+  
+  # Store the result
+  sd_bias_results <- rbind(
+    sd_bias_results,
+    data.frame(
+      sample_size = n,
+      bias_sample_sd = bias_sample_sd
+    )
+  )
+}
+
+# Display the estimated bias at each sample size
+sd_bias_results
+```
+
+Answer: No, s is not an unbiased estimator of σ = 2. Its estimated bias is approximately -0.112 at n = 5, -0.067 at n = 10, -0.008 at n = 30, 0.001 at n = 100. The results show that s tends to underestimate σ, especially at small sample sizes and the bias gets smaller as n grows. This happens even though s² is unbiased for σ². Because taking the square root is a nonlinear transformation, unbiasedness does not necessarily survive a nonlinear transformation.
+
+
+
+### (e)
+
+```{r}
+# Calculate the standard deviation of the 1,000 divide-by-n estimates (n = 5)
+sd_var_n <- sd(results$var_n)
+
+# Calculate the standard deviation of the 1,000 sample variance estimates (n = 5)
+sd_sample_var <- sd(results$sample_var)
+
+# Display the standard deviations
+sd_var_n
+sd_sample_var
+```
+
+Answer: The standard deviation of the 1,000 divide-by-n variance estimates is 2.316, while the standard deviation of the 1,000 sample variance estimates is 2.895. Therefore, the divide-by-n estimator is less variable. This is because it equals the sample variance multiplied by (n − 1)/n = 0.8, which shrinks the spread of the estimates.
+
+However, this does not make it the better estimator. Estimator quality depends on both bias and variability. The divide-by-n estimator is downward biased, so its estimates are tightly clustered around the wrong value. In contrast, the sample variance is unbiased for the true population variance, even though it is more variable.
+
+
+
+## Problem 2
+### (a)
+
+```{r}
+# Create a function that generates one dataset from the true process
+make_data <- function(n, rho) {
+  
+  # Generate z (political interest) from N(0, 1)
+  z <- rnorm(n, mean = 0, sd = 1)
+  
+  # Generate u (the part of x unrelated to z) from N(0, 1)
+  u <- rnorm(n, mean = 0, sd = 1)
+  
+  # Generate the error term from N(0, 1)
+  epsilon <- rnorm(n, mean = 0, sd = 1)
+  
+  # Generate x (news consumption) so that its correlation with z is rho
+  x <- rho * z + sqrt(1 - rho^2) * u
+  
+  # True parameter values
+  beta0 <- 1
+  beta1 <- 2
+  beta2 <- 3
+  
+  # Generate y (political knowledge) from the true model
+  y <- beta0 + beta1 * x + beta2 * z + epsilon
+  
+  # Return the data as a data frame
+  data.frame(y, x, z)
+}
+
+# Set a seed so the results can be reproduced
+set.seed(1)
+
+# Generate 100 observations with rho = 0.5
+d <- make_data(n = 100, rho = 0.5)
+
+# Check the first few rows
+head(d)
+
+# Check that x and z are roughly N(0, 1)
+mean(d$x)
+sd(d$x)
+mean(d$z)
+sd(d$z)
+
+# Check that the correlation between x and z is about 0.5
+cor(d$x, d$z)
+```
+
+Answer: The sample means of x and z are close to 0 (0.02 and 0.11) and their standard deviations are close to 1 (0.94 and 0.90). The correlation between x and z is 0.475, close to the target of 0.5. Small gaps are expected with only 100 observations, so the data match the intended distributions.
+
+
+
+### (b)
+
+```{r}
+# Fit the theorized model (omits z)
+model_short <- lm(y ~ x, data = d)
+
+# Fit the true model (includes z)
+model_true <- lm(y ~ x + z, data = d)
+
+# Estimated coefficients
+coef(model_short)
+coef(model_true)
+
+# Coefficient tables with standard errors
+summary(model_short)
+summary(model_true)
+
+# Confidence intervals
+confint(model_short)
+confint(model_true)
+
+# Plot y against x
+plot(d$x, d$y,
+     xlab = "x (news consumption)",
+     ylab = "y (political knowledge)",
+     main = "y against x, n = 100, rho = 0.5")
+
+# Add the fitted line from the theorized model
+abline(model_short, col = "red", lwd = 2)
+
+# Add the fitted line from the true model (holding z at 0)
+abline(a = coef(model_true)["(Intercept)"],
+       b = coef(model_true)["x"],
+       col = "blue", lwd = 2)
+
+# Add the true line (beta0 = 1, beta1 = 2)
+abline(a = 1, b = 2, lty = 2, lwd = 2)
+
+# Add a legend
+legend("topleft",
+       legend = c("y ~ x", "y ~ x + z", "True line"),
+       col = c("red", "blue", "black"),
+       lty = c(1, 1, 2),
+       lwd = 2,
+       cex = 0.8)
+```
+
+Answer: The model that leaves out z overestimates the effect of x. Its x coefficient is 3.32 (95% CI: 2.76 to 3.88), and the interval misses the true value of 2. The true model gets it right: 1.94 (95% CI: 1.69 to 2.19), which includes 2. The plot shows the same thing: the red line (y ~ x) is too steep, while the blue line (y ~ x + z) sits right on top of the dashed true line. This is omitted variable bias. People who read more news also tend to be more politically interested, and political interest raises knowledge. Without z, the model gives x credit for z's effect.
+
+
+
+### (c)
+
+```{r}
+# Set a seed so the results can be reproduced
+set.seed(1)
+
+# Generate 1,000 observations with rho = 0.5
+d_large <- make_data(n = 1000, rho = 0.5)
+
+# Check the variables
+mean(d_large$x)
+sd(d_large$x)
+mean(d_large$z)
+sd(d_large$z)
+cor(d_large$x, d_large$z)
+
+# Fit both models
+model_short_large <- lm(y ~ x, data = d_large)
+model_true_large <- lm(y ~ x + z, data = d_large)
+
+# Estimated coefficients, standard errors, and confidence intervals
+coef(model_short_large)
+coef(model_true_large)
+summary(model_short_large)
+summary(model_true_large)
+confint(model_short_large)
+confint(model_true_large)
+
+# Plot y against x
+plot(d_large$x, d_large$y,
+     xlab = "x (news consumption)",
+     ylab = "y (political knowledge)",
+     main = "y against x, n = 1000, rho = 0.5")
+
+# Add the fitted line from the theorized model
+abline(model_short_large, col = "red", lwd = 2)
+
+# Add the fitted line from the true model (holding z at 0)
+abline(a = coef(model_true_large)["(Intercept)"],
+       b = coef(model_true_large)["x"],
+       col = "blue", lwd = 2)
+
+# Add the true line
+abline(a = 1, b = 2, lty = 2, lwd = 2)
+
+# Add a legend
+legend("topleft",
+       legend = c("y ~ x", "y ~ x + z", "True line"),
+       col = c("red", "blue", "black"),
+       lty = c(1, 1, 2),
+       lwd = 2,
+       cex = 0.8)
+```
+
+Answer: More data did not resolve the bias. The x coefficient from the model without z is 3.54 (95% CI: 3.37 to 3.71), still far above the true value of 2, and the interval is now even further from 2 because the standard error shrank from 0.28 to 0.09. The true model (y ~ x + z) gives 2.03 (95% CI: 1.95 to 2.10), which includes 2.
+
+A larger sample makes an estimate more precise, but it doesn't fix a misspecified model. Leaving out z keeps pushing the slope toward the wrong value (about 2 + 3 × 0.5 = 3.5), so the estimate just becomes a more confident wrong answer.
+
+
+### (d)
+
+```{r}
+# Set a seed so the results can be reproduced
+set.seed(1)
+
+# Generate 1,000 observations with rho = 0
+d_zero <- make_data(n = 1000, rho = 0)
+
+# Check the variables
+mean(d_zero$x)
+sd(d_zero$x)
+mean(d_zero$z)
+sd(d_zero$z)
+cor(d_zero$x, d_zero$z)
+
+# Fit both models
+model_short_zero <- lm(y ~ x, data = d_zero)
+model_true_zero <- lm(y ~ x + z, data = d_zero)
+
+# Estimated coefficients, standard errors, and confidence intervals
+coef(model_short_zero)
+coef(model_true_zero)
+summary(model_short_zero)
+summary(model_true_zero)
+confint(model_short_zero)
+confint(model_true_zero)
+
+# Plot y against x
+plot(d_zero$x, d_zero$y,
+     xlab = "x (news consumption)",
+     ylab = "y (political knowledge)",
+     main = "y against x, n = 1000, rho = 0")
+
+# Add the fitted line from the theorized model
+abline(model_short_zero, col = "red", lwd = 2)
+
+# Add the fitted line from the true model (holding z at 0)
+abline(a = coef(model_true_zero)["(Intercept)"],
+       b = coef(model_true_zero)["x"],
+       col = "blue", lwd = 2)
+
+# Add the true line
+abline(a = 1, b = 2, lty = 2, lwd = 2)
+
+# Add a legend
+legend("topleft",
+       legend = c("y ~ x", "y ~ x + z", "True line"),
+       col = c("red", "blue", "black"),
+       lty = c(1, 1, 2),
+       lwd = 2,
+       cex = 0.8)
+```
+
+Answer: With rho = 0, leaving out z no longer biases the estimate. The x coefficient from y ~ x is 2.04 (95% CI: 1.84 to 2.24), which includes the true value of 2 and matches the 2.02 from the true model. Omitted variable bias only appears when the left-out variable is related to both x and y. Here z affects y but is unrelated to x, so x doesn't pick up any of its effect.
+
+This means we should include variables that affect y and are related to x, based on theory, since leaving them out biases the estimate and more data won't fix it. Since we never know rho in real data, we can't count on omitted variables being harmless.
