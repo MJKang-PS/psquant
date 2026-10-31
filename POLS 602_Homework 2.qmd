@@ -1,0 +1,439 @@
+---
+title: "Problem set 2"
+format: html
+editor: visual
+---
+
+## Problem 1: Simulation
+
+Data Generating Process
+
+I simulate an outcome variable (Y) as a linear function of a treatment variable (X) and a confounding variable (Z), with random error.
+
+```{r}
+# Load libraries
+library(MASS) 
+library(ggplot2)
+
+# Set random seed and sample size
+set.seed(123)
+n <- 500
+
+# Specify means and variance-covariance matrix
+mu <- c(2, 4)
+
+vcov <- matrix(c(1, 0.8, 0.8, 1), 2, 2)
+
+# Generate correlated treatment and confounder
+design_mat <- mvrnorm(n, mu = mu, Sigma = vcov)
+colnames(design_mat) <- c("X", "Z")
+
+# Generate outcome variable with random error
+Y <- -3 + 5*design_mat[,1] + 1.5*design_mat[,2] + rnorm(n)
+
+# Create dataframe
+data <- data.frame(
+  X = design_mat[,1],
+  Z = design_mat[,2],
+  Y = Y
+)
+
+# Inspect the simulated data
+head(data)
+```
+
+True Linear Model
+
+```{r}
+# Fit the true model
+model_true <- lm(Y ~ X + Z, data = data)
+
+# Print regression summary
+summary(model_true)
+```
+
+### (a) Central Limit Theorem 
+
+```{r}
+# Set random seed
+set.seed(456)
+
+# Number of simulation
+n_sim <- 1000
+
+# Vector to store estimated treatment coefficients
+coef_true <- numeric(n_sim)
+
+# Repeat the simulation
+for (i in 1:n_sim) {
+  
+  # Generate correlated X and Z
+  design_mat <- mvrnorm(n, mu = mu, Sigma = vcov)
+  
+  # Generate the outcome variable
+  Y <- -3 + 5*design_mat[,1] + 1.5*design_mat[,2] + rnorm(n)
+  
+  # Create a simulated dataset
+  sim_data <- data.frame(
+    X = design_mat[,1],
+    Z = design_mat[,2],
+    Y = Y
+  )
+  
+  # Fit the true model
+  model <- lm(Y ~ X + Z, data = sim_data)
+  
+  # Store the estimated coefficient of X
+  coef_true[i] <- coef(model)["X"]
+  
+}
+
+# Calculate mean and standard deviation
+mean(coef_true)
+sd(coef_true)
+
+# Create dataframe for plotting
+coef_data <- data.frame(coef_true = coef_true)
+
+# Plot the sampling distribution
+ggplot(coef_data, aes(x = coef_true)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 30,
+                 fill = "lightblue",
+                 color = "white") +
+  geom_density(color = "blue", linewidth = 1) +
+  geom_vline(xintercept = 5,
+             color = "red",
+             linetype = "dashed") +
+  labs(
+    title = "Sampling Distribution of Treatment Coefficient",
+    x = "Estimated Coefficient of X",
+    y = "Density"
+  ) +
+  theme_bw()
+```
+
+I generated 1,000 simulated datasets, each containing 500 observations, and estimated the true model for each dataset. The sampling distribution of the treatment coefficient is approximately normal, with a mean of 4.9991 and a standard deviation of 0.0750. The distribution is centered near the true coefficient of 5, consistent with the normality of the OLS estimator under the specified data generating process.
+
+
+### (b) Bootstrap Standard Error
+
+```{r}
+# Set random seed
+set.seed(789)
+
+# Number of bootstrap replications
+B <- 2000
+
+# Vector to store bootstrap estimates
+boot_coef <- numeric(B)
+
+# Bootstrap resampling
+for (b in 1:B) {
+
+  # Resample observations with replacement
+  boot_data <- data[
+    sample(1:nrow(data),
+           size = nrow(data),
+           replace = TRUE),
+  ]
+
+  # Fit the true model
+  model_boot <- lm(Y ~ X + Z, data = boot_data)
+
+  # Store the coefficient of X
+  boot_coef[b] <- coef(model_boot)["X"]
+
+}
+
+# Calculate bootstrap standard error
+boot_se <- sd(boot_coef)
+
+# Extract the original OLS standard error
+ols_se <- summary(model_true)$coefficients["X", "Std. Error"]
+
+# Compare standard errors
+print(boot_se)
+print(ols_se)
+```
+
+### (c) Omitted Variable Bias
+
+```{r}
+# Fit a model without the confounding variable
+model_omitted <- lm(Y ~ X, data = data)
+summary(model_omitted)
+
+# Number of simulations
+n_sim <- 1000
+
+# Vector to store estimated coefficients
+coef_omitted <- numeric(n_sim)
+
+# Repeat the simulation using the omitted model
+set.seed(456)
+
+for (i in 1:n_sim) {
+
+  # Generate correlated X and Z
+  design_mat <- mvrnorm(n, mu = mu, Sigma = vcov)
+
+  # Generate outcome
+  Y <- -3 + 5*design_mat[,1] +
+       1.5*design_mat[,2] + rnorm(n)
+
+  # Create simulated dataset
+  sim_data <- data.frame(
+    X = design_mat[,1],
+    Z = design_mat[,2],
+    Y = Y
+  )
+
+  # Fit the omitted variable model
+  model <- lm(Y ~ X, data = sim_data)
+
+  # Store the estimated coefficient of X
+  coef_omitted[i] <- coef(model)["X"]
+
+}
+
+# Calculate mean and standard deviation
+mean(coef_omitted)
+sd(coef_omitted)
+
+# Plot the omitted model's sampling distribution
+omitted_data <- data.frame(coef_omitted = coef_omitted)
+
+ggplot(omitted_data, aes(x = coef_omitted)) +
+  geom_histogram(
+    aes(y = after_stat(density)),
+    bins = 30,
+    fill = "lightblue",
+    color = "white"
+  ) +
+  geom_density(color = "blue", linewidth = 1) +
+  geom_vline(xintercept = 5,
+             color = "red",
+             linetype = "dashed") +
+  labs(
+    title = "Sampling Distribution: Omitted Variable Model",
+    x = "Estimated Coefficient of X",
+    y = "Density"
+  ) +
+  theme_bw()
+
+# Compare with the true model from part (a)
+comparison_data <- data.frame(
+  coefficient = c(coef_true, coef_omitted),
+  model = rep(c("True Model", "Omitted Variable Model"),
+              each = n_sim)
+)
+
+ggplot(comparison_data,
+       aes(x = coefficient, fill = model, color = model)) +
+  geom_density(alpha = 0.3, linewidth = 1) +
+  geom_vline(xintercept = 5,
+             linetype = "dashed",
+             color = "red") +
+  geom_vline(xintercept = 6.2,
+             linetype = "dotted",
+             color = "black") +
+  labs(
+    title = "Sampling Distributions: True vs. Omitted Model",
+    x = "Estimated Coefficient of X",
+    y = "Density"
+  ) +
+  theme_bw()
+```
+
+Repeating the simulation 1,000 times produced an approximately normal sampling distribution with a mean of 6.1982 and a standard deviation of 0.0578, compared with 4.9991 and 0.0750 in the true model. 
+
+The omitted-variable model overestimates the true treatment effect of 5 because X and Z are positively correlated, causing the estimated coefficient of X to absorb part of the effect of Z. 
+
+This suggests that an approximately normal sampling distribution and statistical significance do not necessarily imply an unbiased estimate of the true treatment effect.
+
+
+
+## Problem 2: Data Analysis
+
+### (a) Difference in Means Hypothesis Test
+
+I examine whether mean net approval differs between country-year
+observations with high and low levels of household debt. I divide the observations into two groups based on the sample median of household debt.
+
+The null hypothesis is that the two groups have equal population means, while the alternative hypothesis is that their means differ.
+
+I use a two-sided Welch's t-test with a significance level of 0.05 because the population variances are unknown and the two groups may have unequal variances.
+
+```{r}
+# Load libraries
+library(dplyr)
+library(ggplot2)
+
+# Load the dataset
+toy_data <- read.csv("https://raw.githubusercontent.com/reshi-rajan/Methods-Resources/refs/heads/main/toy_data.csv")
+
+# Create net approval variable
+toy_data <- toy_data |>
+  mutate(net_approval = approval_not_smoothed -
+           disapproval_not_smoothed)
+
+# Inspect the data
+head(toy_data)
+
+# Remove observations with missing values
+analysis_data <- toy_data |>
+  filter(!is.na(hh_debt),
+         !is.na(net_approval))
+
+# Calculate median household debt
+debt_median <- median(analysis_data$hh_debt)
+
+# Create high- and low-debt groups
+analysis_data <- analysis_data |>
+  mutate(
+    debt_group = if_else(
+      hh_debt > debt_median,
+      "High",
+      "Low"
+    ),
+    debt_group = factor(
+      debt_group,
+      levels = c("High", "Low")
+    )
+  )
+
+# Check group sizes
+table(analysis_data$debt_group)
+
+# Calculate descriptive statistics by group
+analysis_data |>
+  group_by(debt_group) |>
+  summarise(
+    n = n(),
+    mean_approval = mean(net_approval),
+    sd_approval = sd(net_approval)
+  )
+
+# Conduct Welch's two-sample t-test
+test_result <- t.test(
+  net_approval ~ debt_group,
+  data = analysis_data,
+  alternative = "two.sided",
+  var.equal = FALSE,
+  conf.level = 0.95
+)
+
+# Print t-test results
+test_result
+```
+
+The mean net approval is -3.29 for the high-debt group and -7.15 for the low-debt group, a difference of 3.86 percentage points. However, this difference is not statistically significant (t = 1.19, p = 0.237), so I fail to reject the null hypothesis of equal means. Substantively, the high-debt group has higher net approval on average, but the evidence is insufficient to conclude that the difference exists in the population.
+
+
+### (b) Linear Regression
+
+```{r}
+# Set Low-debt group as the reference category
+analysis_data$debt_group <- relevel(
+  analysis_data$debt_group,
+  ref = "Low"
+)
+
+# Fit a linear model
+model_b <- lm(net_approval ~ debt_group,
+              data = analysis_data)
+
+# Print regression summary
+summary(model_b)
+
+# Compare p-values from the t-test and regression
+test_result$p.value
+
+summary(model_b)$coefficients[
+  "debt_groupHigh", "Pr(>|t|)"
+]
+```
+
+
+### (c) Permutation Test
+
+```{r}
+# Calculate observed difference in means (High - Low)
+observed_diff <- mean(
+  analysis_data$net_approval[analysis_data$debt_group == "High"]
+) - mean(
+  analysis_data$net_approval[analysis_data$debt_group == "Low"]
+)
+
+print(observed_diff)
+
+# Set random seed and number of permutations
+set.seed(123)
+B <- 5000
+
+# Store permutation statistics
+perm_diff <- numeric(B)
+
+# Conduct permutation test
+for (i in 1:B) {
+
+  # Randomly shuffle group labels
+  shuffled_group <- sample(analysis_data$debt_group)
+
+  # Calculate difference in means
+  perm_diff[i] <- mean(
+    analysis_data$net_approval[shuffled_group == "High"]
+  ) - mean(
+    analysis_data$net_approval[shuffled_group == "Low"]
+  )
+
+}
+
+# Calculate two-sided permutation p-value
+perm_p <- (sum(abs(perm_diff) >= abs(observed_diff)) + 1) / (B + 1)
+
+print(perm_p)
+
+# Plot null distribution
+perm_data <- data.frame(perm_diff = perm_diff)
+
+ggplot(perm_data, aes(x = perm_diff)) +
+  geom_histogram(
+    aes(y = after_stat(density)),
+    bins = 30,
+    fill = "lightblue",
+    color = "white"
+  ) +
+  geom_density(color = "blue", linewidth = 1) +
+  geom_vline(
+    xintercept = observed_diff,
+    color = "red",
+    linetype = "dashed",
+    linewidth = 1
+  ) +
+  labs(
+    title = "Permutation Null Distribution",
+    x = "Difference in Mean Net Approval (High - Low)",
+    y = "Density"
+  ) +
+  theme_bw()
+
+# Compare p-values
+p_ttest <- test_result$p.value
+
+p_regression <- summary(model_b)$coefficients[
+  "debt_groupHigh", "Pr(>|t|)"
+]
+
+p_values <- data.frame(
+  Method = c("Welch t-test", "OLS Regression", "Permutation Test"),
+  P_value = c(p_ttest, p_regression, perm_p)
+)
+
+print(p_values)
+```
+
+The permutation null distribution is approximately normal and centered around zero. The observed mean difference of 3.862 falls within the distribution and is not statistically significant (p = 0.234). The permutation p-value is very close to those from the Welch's t-test (p = 0.237) and OLS regression (p = 0.236). All three tests lead to the same conclusion: we fail to reject the null hypothesis of equal means at the 0.05 significance level.
+
+
